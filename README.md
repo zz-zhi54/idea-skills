@@ -18,9 +18,49 @@
 npx skills add zz-zhi54/idea-skills -g --skill '*'
 ```
 
-### `-a` 是安装目标，不是运行者
+### `-a codex` 到底安装到哪里？
 
-`-a`（`--agent`）告诉 Skills CLI 将技能安装到哪个助手对应的目录。**它不会启动该助手，不会切换模型，也不会限制技能只能由该助手使用。** 同样，省略 `-a` 不表示自动安装到所有助手；CLI 会检测助手并让你选择。
+**本仓库命令中的 `-g -a codex`，会把三个技能安装到当前用户主目录下的 `~/.agents/skills/`，不是 `~/.codex/skills/`，也不是本仓库目录。**
+
+执行：
+
+```bash
+npx skills add zz-zhi54/idea-skills -g --skill '*' -a codex -y
+```
+
+安装后的目录是：
+
+```text
+~/.agents/skills/
+├── idea/
+│   ├── SKILL.md
+│   └── scripts/idea.py
+├── idea-database/
+│   ├── SKILL.md
+│   └── scripts/idea-database.py
+└── idea-debug/
+    ├── SKILL.md
+    └── scripts/idea-debug.py
+```
+
+`~` 表示当前用户的主目录。在本次安装的机器上，完整路径分别是：
+
+```text
+/Users/zz_zhi/.agents/skills/idea/
+/Users/zz_zhi/.agents/skills/idea-database/
+/Users/zz_zhi/.agents/skills/idea-debug/
+```
+
+**安装位置由 `-g` 和 `-a codex` 共同决定：**
+
+| 参数组合 | 安装位置 |
+| --- | --- |
+| `-g -a codex` | 用户主目录下的 `~/.agents/skills/<技能名>/`，可跨项目使用 |
+| `-a codex`，不加 `-g` | 执行命令时当前目录下的 `.agents/skills/<技能名>/`，用于该项目 |
+
+例如，在 `/path/to/my-project` 中执行不带 `-g` 的安装命令，会安装到 `/path/to/my-project/.agents/skills/`。
+
+`-a`（`--agent`）只选择助手对应的安装目录，`-g` 再选择用户级而非项目级范围。**`-a codex` 不会启动 Codex，不会切换模型，也不会限制技能只能由 Codex 使用。** 同样，省略 `-a` 不表示自动安装到所有助手；CLI 会检测助手并让你选择。
 
 | 实际使用环境 | 安装参数 | 用户级技能目录 |
 | --- | --- | --- |
@@ -37,7 +77,7 @@ npx skills add zz-zhi54/idea-skills -g --skill '*'
 npx skills add zz-zhi54/idea-skills -g --skill '*' -a codex -y
 ```
 
-参数含义：`-g` 安装到用户级目录；`--skill '*'` 选择仓库内全部技能；`-a codex` 选择上述共享目录安装目标；`-y` 跳过安装确认。
+参数含义：`-g -a codex` 将技能安装到 `~/.agents/skills/`；`--skill '*'` 选择仓库内全部技能；`-y` 跳过安装确认。
 
 技能被触发后的实际调用链是：**DSH 中的 AI 助手 → 技能内 Python 包装脚本 → mcpc → IntelliJ IDEA MCP**。Skills CLI 只负责安装和更新，不参与这条运行链。
 
