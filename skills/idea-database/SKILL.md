@@ -1,0 +1,118 @@
+---
+name: idea-database
+description: Use IntelliJ IDEA MCP database tools to inspect database connections, schemas, objects, data, SQL queries, and query status for databases configured in IntelliJ IDEA. Use this skill whenever a database task should use an IntelliJ IDEA datasource, including discovery, metadata inspection, previews, read-only queries, connection diagnostics, and carefully requested database changes.
+---
+
+# IntelliJ IDEA Database
+
+Use IntelliJ IDEA MCP database tools for databases configured in the current IDE project. Prefer them over:
+
+- reading JDBC credentials from project files
+- using `mysql`, `psql`, or other database CLI tools
+- creating separate database connections
+- guessing database structure from source code
+
+All database capabilities in this skill are invoked through the bundled Python wrapper at `<resolved Skill directory>/scripts/idea-database.py`. Do not use `execute_tool` or another router. Run it with Python while keeping the command working directory inside the DSH project currently being handled; do not `cd` into the Skill directory. The wrapper resolves the nearest ancestor containing `.git` (or uses the working directory if none exists) as `IJ_MCP_SERVER_PROJECT_PATH`. mcpc state is stored in `<project root>/.dsh/mcpc`, and all three IDEA Skills share the fixed session `@idea`. Examples use `python scripts/idea-database.py` as shorthand for `python <resolved Skill directory>/scripts/idea-database.py`.
+
+The wrapper accepts an IDEA database tool name and, when needed, one raw JSON argument string; pass the original argument names and JSON values unchanged. Use `python scripts/idea-database.py <tool> --help` to retrieve the tool definition through mcpc `tools-get`. The wrapper only supports the Database tools listed below. Python and the system-installed `mcpc` executable are required; the wrapper does not install mcpc.
+
+Supported tools:
+
+- `list_database_connections`
+- `list_database_schemas`
+- `list_schema_object_kinds`
+- `list_schema_objects`
+- `get_database_object_description`
+- `introspect_schema`
+- `preview_table_data`
+- `execute_sql_query`
+- `fetch_query_result`
+- `list_recent_sql_queries`
+- `cancel_sql_query`
+- `test_database_connection`
+- `create_database_connection`
+- `edit_database_connection`
+
+Keep metadata queries, previews, and SQL results narrowly scoped on the first call. Expand the scope or fetch more rows only when the current result is insufficient to continue. Tool parameters and official defaults refer to the [JetBrains MCP Server documentation](https://www.jetbrains.com/help/idea/mcp-server.html); conservative Skill limits are identified separately.
+
+## Workflow
+
+### Connection
+
+Use `list_database_connections` as the default entry point:
+
+```text
+python scripts/idea-database.py list_database_connections
+```
+
+Use the returned connection `id` as `connectionId` for subsequent database tools. The exception is `test_database_connection`, which expects the original parameter name `id`:
+
+```text
+python scripts/idea-database.py test_database_connection '{"id":"xxx"}'
+```
+
+### Schema and objects
+
+Use `list_database_schemas` to discover available databases and schemas:
+
+```text
+python scripts/idea-database.py list_database_schemas '{"connectionId":"xxx"}'
+```
+
+Use `list_schema_objects` to discover tables, views, and other objects. Pass `connectionId`, `databaseName`, and `schemaName`; when the target kind is known, pass `kind` to narrow the result:
+
+```text
+python scripts/idea-database.py list_schema_objects '{"connectionId":"xxx","databaseName":"app","schemaName":"public"}'
+```
+
+When using `kind`, pass the actual code returned by `list_schema_object_kinds`. This tool has no `limit` parameter, so avoid listing every object in a schema when a kind filter will suffice. If the required object kind is unknown, call `list_schema_object_kinds` with `connectionId` before filtering. Do not guess object kind codes or query system tables with SQL as a substitute for IDEA's available metadata tools.
+
+### Object structure
+
+Use `get_database_object_description` with `connectionId`, `databaseName`, `schemaName`, `objectName`, and `kind` to inspect columns, types, keys, and indexes:
+
+```text
+python scripts/idea-database.py get_database_object_description '{"connectionId":"xxx","databaseName":"app","schemaName":"public","objectName":"users","kind":"table"}'
+```
+
+Prefer this over manually querying database metadata tables.
+
+### Metadata refresh
+
+Use `introspect_schema` only when required metadata is missing or clearly stale. Pass `connectionId`, `databaseName`, and `schemaName`, then retry the original metadata operation. Do not introspect as a default first step.
+
+### Preview data
+
+For a quick look at table-like data, prefer `preview_table_data` rather than immediately writing `SELECT *`. Explicitly set `maxRowCount: 20` on the first call:
+
+```text
+python scripts/idea-database.py preview_table_data '{"connectionId":"xxx","databaseName":"app","schemaName":"public","tableName":"users","maxRowCount":20}'
+```
+
+The official default for `maxRowCount` is 100; `20` is this Skill's conservative recommendation, not the official default. Increase it only when the preview is insufficient.
+
+### SQL
+
+Use `execute_sql_query` when filtering, joins, aggregation, ordering, or another custom query is needed. Its arguments are `connectionId` and `queryText`; use `databaseName` and `schemaName` with the schema/object tools instead. For exploratory `SELECT` queries, add `LIMIT 20` by default, except for aggregate queries or queries that naturally return very few rows. Avoid unbounded `SELECT *`:
+
+```text
+python scripts/idea-database.py execute_sql_query '{"connectionId":"xxx","queryText":"select * from users limit 20"}'
+```
+
+Prefer targeted, read-only SQL. `fetch_query_result` accepts `resultSetId` and `offset` only; it has no `limit` parameter and cannot be used to set a page size. Bound the result size in the original SQL (for example, with `LIMIT 20`) or with `preview_table_data.maxRowCount`. If more rows from the existing result are needed, use the returned `resultSetId` and the required `offset` rather than executing the SQL again.
+
+### Connection problems
+
+Use `test_database_connection` when a connection fails or its status, DBMS, or driver information needs verification. Pass the connection's `id` as `id`, not `connectionId`.
+
+### Query status
+
+Use `list_recent_sql_queries` with `connectionId` to inspect running or recent SQL queries. Use `cancel_sql_query` with a returned `sessionId` when a running query needs to be stopped.
+
+### Connection management
+
+Use `create_database_connection` only when no suitable IntelliJ IDEA datasource exists. Use `edit_database_connection` only when an existing connection actually needs modification. Do not create or modify a connection merely to query data. Preserve the tool's native argument names; use `python scripts/idea-database.py <tool> --help` to inspect the current schema when needed.
+
+## Safety
+
+Prefer metadata inspection, data previews, and read-only SQL. Execute modifying SQL only when the user explicitly requests it, including `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `TRUNCATE`, `ALTER`, `DROP`, and `CREATE`. Do not assume an IntelliJ IDEA connection is read-only just because it is already configured.
