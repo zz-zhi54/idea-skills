@@ -12,13 +12,34 @@
 
 ## 安装
 
-需要 Node.js / npm 提供 `npx`。安装全部三个技能到用户级目录：
+需要 Node.js / npm 提供 `npx`。通用安装命令如下，按 CLI 提示选择你实际使用的助手：
+
+```bash
+npx skills add zz-zhi54/idea-skills -g --skill '*'
+```
+
+### `-a` 是安装目标，不是运行者
+
+`-a`（`--agent`）告诉 Skills CLI 将技能安装到哪个助手对应的目录。**它不会启动该助手，不会切换模型，也不会限制技能只能由该助手使用。** 同样，省略 `-a` 不表示自动安装到所有助手；CLI 会检测助手并让你选择。
+
+| 实际使用环境 | 安装参数 | 用户级技能目录 |
+| --- | --- | --- |
+| 本项目当前使用的 DeepSeek Harness（DSH） | `-a codex`，借用 CLI 的共享目录安装目标 | `~/.agents/skills/` |
+| Codex | `-a codex` | `~/.agents/skills/` |
+| Claude Code | `-a claude-code` | `~/.claude/skills/` |
+| Cursor | `-a cursor` | `~/.cursor/skills/` |
+
+本次迁移中，**实际读取和使用三个技能的是 DSH，不是 Codex**。DSH 当前会话从 `~/.agents/skills/` 加载技能，因此使用 `-a codex` 将文件安装到这个共享目录。这里的 `codex` 只是 Skills CLI 的安装目标名称，不要求安装或运行 Codex；也不是 `-a dsh` 的别名。其他助手能否使用，取决于它们是否读取相应目录并支持技能执行。
+
+当前 DSH 环境的确定性安装命令：
 
 ```bash
 npx skills add zz-zhi54/idea-skills -g --skill '*' -a codex -y
 ```
 
-`-a codex` 将技能安装到 `~/.agents/skills/`，适合本仓库当前使用的 DSH / 共享技能目录。它不是对 Codex 的运行依赖；技能执行依赖的是 Python、mcpc 和 IDEA MCP。使用其他助手时，将代理参数替换为对应名称，例如 `-a claude-code` 或 `-a cursor`。也可以省略 `-a`，按 CLI 提示选择代理。
+参数含义：`-g` 安装到用户级目录；`--skill '*'` 选择仓库内全部技能；`-a codex` 选择上述共享目录安装目标；`-y` 跳过安装确认。
+
+技能被触发后的实际调用链是：**DSH 中的 AI 助手 → 技能内 Python 包装脚本 → mcpc → IntelliJ IDEA MCP**。Skills CLI 只负责安装和更新，不参与这条运行链。
 
 查看仓库中的技能（不安装）：
 
@@ -26,7 +47,7 @@ npx skills add zz-zhi54/idea-skills -g --skill '*' -a codex -y
 npx skills add zz-zhi54/idea-skills --list
 ```
 
-只安装一个技能：
+当前 DSH 环境中只安装一个技能：
 
 ```bash
 npx skills add zz-zhi54/idea-skills -g --skill idea-debug -a codex -y
@@ -48,7 +69,7 @@ IDEA MCP 配置可参考 [JetBrains 官方文档](https://www.jetbrains.com/help
 
 让助手加载对应技能，再通过技能内的 Python 包装脚本调用工具。**工作目录应位于当前处理的项目，不要切换到已安装技能目录。**
 
-下面是全局安装后的示例，请在目标项目中执行：
+下面是安装到 DSH / Codex 共享目录后的示例，请在目标项目中执行；若安装给其他助手，改用其实际技能目录：
 
 ```bash
 python3 "$HOME/.agents/skills/idea/scripts/idea.py" search_symbol '{"q":"OrderService","limit":20}'
@@ -85,7 +106,7 @@ python3 "$HOME/.agents/skills/idea/scripts/idea.py" search_symbol --help
    npx skills update idea idea-database idea-debug -g -y
    ```
 
-也可以重新运行安装命令，从仓库覆盖安装全部三个技能：
+当前 DSH 环境也可以重新运行以下命令，从仓库覆盖安装全部三个技能；其他助手请换成对应的 `-a` 参数：
 
 ```bash
 npx skills add zz-zhi54/idea-skills -g --skill '*' -a codex -y
